@@ -35,6 +35,7 @@ import type { FilterManager } from '../filter/filterManager';
 import type { FilterValueService } from '../filter/filterValueService';
 import type { QuickFilterService } from '../filter/quickFilterService';
 import type { FocusService } from '../focusService';
+import type { FormulaeService } from '../formulae/formulaeService';
 import type { ScrollVisibleService } from '../gridBodyComp/scrollVisibleService';
 import type { GridDestroyService } from '../gridDestroyService';
 import type { GridOptionsService } from '../gridOptionsService';
@@ -313,6 +314,7 @@ export interface CoreBeanCollection {
     rowSpanSvc?: RowSpanService;
     spannedRowRenderer?: SpannedRowRenderer;
     findSvc?: IFindService;
+    formulae?: FormulaeService;
 }
 
 export type BeanCollection = CoreBeanCollection & {
@@ -499,4 +501,5 @@ export type BeanName =
     | 'csrmChildrenTreeNodeSvc'
     | 'rowSpanSvc'
     | 'spannedRowRenderer'
-    | 'showRowGroupColValueSvc';
+    | 'showRowGroupColValueSvc'
+    | 'formulae';
