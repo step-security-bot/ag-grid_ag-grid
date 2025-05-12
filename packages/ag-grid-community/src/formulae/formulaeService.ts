@@ -155,16 +155,6 @@ const resolveFormula = (beans: BeanCollection, formula: FormulaTree): any => {
                 return null; // error
             }
 
-            if (getFormula(cellColumn, cellNode) != null) {
-                const formula = getFormula(cellColumn, cellNode);
-                if (!formula) {
-                    return null; //error
-                }
-                const parsedFormula = parse(formula);
-                if (parsedFormula) {
-                    return resolveFormula(beans, parsedFormula);
-                }
-            }
             return beans.valueSvc.getValue(cellColumn, cellNode); // cyclic issues
         }
         return resolveFormula(beans, operand);

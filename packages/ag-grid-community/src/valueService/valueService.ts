@@ -139,13 +139,7 @@ export class ValueService extends BeanStub implements NamedBean {
         // if doing grouping and footers, we don't want to include the agg value
         // in the header when the group is open
         const ignoreAggData = isOpenedGroup && !groupShowsAggData;
-        let value = null;
-        if (column && this.beans.formulae?.isFormulaCell(column, node as RowNode)) {
-            value = this.beans.formulae.resolveValue(column, node as RowNode);
-        } else {
-            value = this.getValue(column, node, ignoreAggData);
-        }
-
+        const value = this.getValue(column, node, ignoreAggData);
         const format = includeValueFormatted && !(exporting && column.colDef.useValueFormatterForExport === false);
         return {
             value,
@@ -153,7 +147,7 @@ export class ValueService extends BeanStub implements NamedBean {
         };
     }
 
-    public getValue(column: AgColumn, rowNode?: IRowNode | null, ignoreAggData = false): any {
+    public getValue(column: AgColumn, rowNode?: IRowNode | null, ignoreAggData = false, returnFormulae = false): any {
         // hack - the grid is getting refreshed before this bean gets initialised, race condition.
         // really should have a way so they get initialised in the right order???
         if (!this.initialised) {
@@ -180,6 +174,10 @@ export class ValueService extends BeanStub implements NamedBean {
             if (colRowGroupIndex > rowNode.level) {
                 return null;
             }
+        }
+
+        if (column && !returnFormulae && this.beans.formulae?.isFormulaCell(column, rowNode as RowNode)) {
+            return this.beans.formulae.resolveValue(column, rowNode as RowNode);
         }
 
         // don't retrieve group values from field or valueGetter for multiple auto cols
