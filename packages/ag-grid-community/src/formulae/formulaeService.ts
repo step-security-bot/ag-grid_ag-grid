@@ -1,5 +1,6 @@
-import { AgColumn, BeanStub, IEventEmitter, NamedBean, RowNode } from '../main';
+import { AgColumn, BeanCollection, BeanStub, IEventEmitter, NamedBean, RowNode } from '../main';
 
+//https://plnkr.co/edit/ZFLxHnG6dDPnhC3v?open=main.js
 const getFormula = (column: AgColumn, node: RowNode): string | null => {
     if (!node.data) {
         return null;
@@ -50,7 +51,7 @@ const parseOperand = (operand: string): Cell | number | string | boolean | null 
         return false;
     }
 
-    // better num passing probs
+    // better num parsing probs
     const num = Number(trimmed);
     if (!isNaN(num)) {
         return num;
@@ -135,15 +136,56 @@ const parse = (formula: string): FormulaTree | null => {
     return null;
 };
 
-class CellFormula implements IEventEmitter<'destroyed' | 'recalculated'> {
+const resolveFormula = (beans: BeanCollection, formula: FormulaTree): any => {
+    const { operation, operands } = formula;
+    const operationFn = beans.formulae?.getFunction(operation);
+    if (!operationFn) {
+        return null; // error
+    }
+
+    const operandValues = operands.map((operand) => {
+        if (typeof operand !== 'object') {
+            return operand;
+        }
+        if ('rowId' in operand && 'columnId' in operand) {
+            const cellNode = beans.rowModel.getRowNode(operand.rowId);
+            const cellColumn = beans.colModel.getColById(operand.columnId);
+            if (!cellNode || !cellColumn) {
+                console.error('Invalid cell reference', cellNode, cellColumn);
+                return null; // error
+            }
+
+            if (getFormula(cellColumn, cellNode) != null) {
+                const formula = getFormula(cellColumn, cellNode);
+                if (!formula) {
+                    return null; //error
+                }
+                const parsedFormula = parse(formula);
+                if (parsedFormula) {
+                    return resolveFormula(beans, parsedFormula);
+                }
+            }
+            return beans.valueSvc.getValue(cellColumn, cellNode); // cyclic issues
+        }
+        return resolveFormula(beans, operand);
+    });
+    console.log(operandValues);
+    return operationFn(...operandValues);
+};
+
+class CellFormula {
     constructor(
         private rowNode: RowNode,
-        private column: AgColumn
+        private column: AgColumn,
+        private formulaString: string,
+        private readonly formulaService: FormulaeService,
+        private readonly beans: BeanCollection
     ) {}
 
-    private formulaString: string | null = null;
     private formula: FormulaTree | null = null;
     private value: any = null;
+    private valueStale = true;
+    private treeStale: boolean = true;
 
     private setFormulaString(formulaString: string) {
         if (this.formulaString === formulaString) {
@@ -151,73 +193,40 @@ class CellFormula implements IEventEmitter<'destroyed' | 'recalculated'> {
         }
 
         this.formulaString = formulaString;
-        const parsedFormula = parse(formulaString);
-        if (parsedFormula) {
-            this.formula = parsedFormula;
-            // recompute and update parents if value changes
-        }
+        this.valueStale = true;
+        this.treeStale = true;
     }
 
-    public forEachDependedOnCell(callback: (cell: Cell) => void) {
-        if (!this.formula) {
-            return;
+    public onDependencyChanged() {
+        this.valueStale = true;
+    }
+
+    public getValue() {
+        if (!this.valueStale) {
+            return this.value;
         }
 
-        const forEachOperandCell = (operand: FormulaOperand) => {
-            if (typeof operand === 'object' && 'rowId' in operand && 'columnId' in operand) {
-                callback(operand);
-            } else if (Array.isArray(operand)) {
-                operand.forEach(forEachOperandCell);
+        if (this.treeStale) {
+            const parsedFormula = parse(this.formulaString);
+            if (parsedFormula) {
+                this.formula = parsedFormula;
             }
-        };
-
-        forEachOperandCell(this.formula);
-    }
-
-    private resolveFormula(formula: FormulaTree): any {
-        const { operation, operands } = formula;
-        if (!this.supportedOperations.has(operation)) {
-            return null; // error
+            this.treeStale = false;
         }
 
-        const operationFn = this.supportedOperations.get(operation);
-        if (operationFn) {
-            return operationFn(
-                ...operands.map((operand) => {
-                    if (typeof operand !== 'object') {
-                        return operand;
-                    }
-                    if ('rowId' in operand && 'columnId' in operand) {
-                        const cellNode = this.beans.rowModel.getRowNode(operand.rowId);
-                        const cellColumn = this.beans.colModel.getColById(operand.columnId);
-                        if (!cellNode || !cellColumn) {
-                            return null; // error
-                        }
-
-                        if (this.isFormulaCell(cellColumn, cellNode)) {
-                            const formula = getFormula(cellColumn, cellNode);
-                            if (!formula) {
-                                return null; //error
-                            }
-                            const parsedFormula = parse(formula);
-                            if (parsedFormula) {
-                                return this.resolveFormula(parsedFormula);
-                            }
-                        }
-                        return this.beans.valueSvc.getValue(cellColumn, cellNode); // cyclic issues
-                    }
-                    return this.resolveFormula(operand);
-                })
-            );
+        if (!this.formula) {
+            return null;
         }
-        return null;
+
+        this.valueStale = false;
+        return (this.value = resolveFormula(this.beans, this.formula));
     }
 }
 
 export class FormulaeService extends BeanStub implements NamedBean {
     beanName = 'formulae' as const;
 
-    private cachedResult = new Map<string, CachedFormulaResult>();
+    private cachedResult = new Map<RowNode, Map<AgColumn, CellFormula>>();
 
     private supportedOperations = new Map([
         ['SUM', (...args: any[]) => args.reduce((acc, curr) => curr + acc, 0)], // should also support objects, and throw if wrong type provided
@@ -229,22 +238,39 @@ export class FormulaeService extends BeanStub implements NamedBean {
         ['AVG', (...args: any[]) => args.reduce((acc, curr) => acc + curr, 0) / args.length],
     ]);
 
+    // temp, when value changes, clear all cached results
+    public reset() {
+        this.cachedResult.clear(); // formula are fine? just set to stale
+        this.beans.rowRenderer.refreshCells();
+    }
+
     public isFormulaCell(column: AgColumn, node: RowNode): boolean {
         const formula = getFormula(column, node);
         return !!formula;
     }
 
+    public getFunction(name: string) {
+        return this.supportedOperations.get(name);
+    }
+
     public resolveValue(column: AgColumn, node: RowNode): any {
-        const formula = getFormula(column, node);
-        if (!formula) {
+        const formulaString = getFormula(column, node);
+        if (!formulaString) {
             return null;
         }
 
-        const parsedFormula = parse(formula);
-        if (!parsedFormula) {
-            return null;
+        let rowFormulas = this.cachedResult.get(node);
+        if (!rowFormulas) {
+            rowFormulas = new Map();
+            this.cachedResult.set(node, rowFormulas);
         }
 
-        return this.resolveFormula(parsedFormula);
+        let cellFormula = rowFormulas.get(column);
+        if (!cellFormula) {
+            cellFormula = new CellFormula(node, column, formulaString, this, this.beans);
+            rowFormulas.set(column, cellFormula);
+        }
+
+        return cellFormula.getValue();
     }
 }

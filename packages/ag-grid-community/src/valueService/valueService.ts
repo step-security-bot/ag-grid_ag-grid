@@ -379,6 +379,8 @@ export class ValueService extends BeanStub implements NamedBean {
 
         const savedValue = this.getValue(column, rowNode);
 
+        this.beans.formulae?.reset();
+
         this.eventSvc.dispatchEvent({
             type: 'cellValueChanged',
             event: null,
