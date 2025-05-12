@@ -140,7 +140,7 @@ const resolveFormula = (beans: BeanCollection, formula: FormulaTree): any => {
     const { operation, operands } = formula;
     const operationFn = beans.formulae?.getFunction(operation);
     if (!operationFn) {
-        return null; // error
+        throw Error('#NAME?');
     }
 
     const operandValues = operands.map((operand) => {
@@ -151,15 +151,13 @@ const resolveFormula = (beans: BeanCollection, formula: FormulaTree): any => {
             const cellNode = beans.rowModel.getRowNode(operand.rowId);
             const cellColumn = beans.colModel.getColById(operand.columnId);
             if (!cellNode || !cellColumn) {
-                console.error('Invalid cell reference', cellNode, cellColumn);
-                return null; // error
+                throw Error('#REF!');
             }
 
             return beans.valueSvc.getValue(cellColumn, cellNode); // cyclic issues
         }
         return resolveFormula(beans, operand);
     });
-    console.log(operandValues);
     return operationFn(...operandValues);
 };
 
@@ -176,6 +174,7 @@ class CellFormula {
     private value: any = null;
     private valueStale = true;
     private treeStale: boolean = true;
+    private error: string | null = null;
 
     private setFormulaString(formulaString: string) {
         if (this.formulaString === formulaString) {
@@ -193,7 +192,7 @@ class CellFormula {
 
     public getValue() {
         if (!this.valueStale) {
-            return this.value;
+            return this.error ?? this.value;
         }
 
         if (this.treeStale) {
@@ -209,14 +208,18 @@ class CellFormula {
         }
 
         this.valueStale = false;
-        return (this.value = resolveFormula(this.beans, this.formula));
+        try {
+            return (this.value = resolveFormula(this.beans, this.formula));
+        } catch (e) {
+            return (this.error = e.message);
+        }
     }
 }
 
 export class FormulaeService extends BeanStub implements NamedBean {
     beanName = 'formulae' as const;
 
-    private cachedResult = new Map<RowNode, Map<AgColumn, CellFormula>>();
+    private cachedResult = new WeakMap<RowNode, WeakMap<AgColumn, CellFormula>>();
 
     private supportedOperations = new Map([
         ['SUM', (...args: any[]) => args.reduce((acc, curr) => curr + acc, 0)], // should also support objects, and throw if wrong type provided
@@ -228,9 +231,20 @@ export class FormulaeService extends BeanStub implements NamedBean {
         ['AVG', (...args: any[]) => args.reduce((acc, curr) => acc + curr, 0) / args.length],
     ]);
 
+    public postConstruct(): void {
+        const customFuncs = this.gos.get('formulaFuncs');
+        if (!customFuncs) {
+            return;
+        }
+        Object.keys(customFuncs).forEach((name) => {
+            this.supportedOperations.set(name, customFuncs[name]!);
+        });
+    }
+
     // temp, when value changes, clear all cached results
     public reset() {
-        this.cachedResult.clear(); // formula are fine? just set to stale
+        // clear old result, any way to do more granularly?
+        this.cachedResult = new WeakMap<RowNode, WeakMap<AgColumn, CellFormula>>();
         this.beans.rowRenderer.refreshCells();
     }
 
