@@ -33,7 +33,8 @@ const GridComp = ({ context }: GridCompProps) => {
     const eRootWrapperRef = useRef<HTMLDivElement | null>(null);
     const tabGuardRef = useRef<TabGuardCompCallback>();
     // eGridBodyParent is state as we use it in render
-    const [eGridBodyParent, setGridBodyParent] = useState<HTMLDivElement | null>(null);
+    // const [eGridBodyParent, setGridBodyParent] = useState<HTMLDivElement | null>(null);
+    const eGridBodyParentRef = useRef<HTMLDivElement | null>(null);
 
     const focusInnerElementRef = useRef<(fromBottom?: boolean) => void>(() => undefined);
     const paginationCompRef = useRef<JsTabGuardComp | undefined>();
@@ -50,8 +51,15 @@ const GridComp = ({ context }: GridCompProps) => {
 
     useReactCommentEffect(' AG Grid ', eRootWrapperRef);
 
-    const setRef = useCallback((eRef: HTMLDivElement) => {
-        eRootWrapperRef.current = eRef;
+    useEffect(() => {
+        console.log('GridComp useEffect');
+
+        if (initialised) {
+            console.log('GridComp useEffect already initialised');
+            return;
+        }
+
+        const eRef = eRootWrapperRef.current;
         gridCtrlRef.current = eRef ? context.createBean(new GridCtrl()) : context.destroyBean(gridCtrlRef.current);
 
         if (!eRef || context.isDestroyed()) {
@@ -93,13 +101,24 @@ const GridComp = ({ context }: GridCompProps) => {
         gridCtrl.setComp(compProxy, eRef, eRef);
 
         setInitialised(true);
+
+        return () => {
+            console.log('GridComp useEffect destroy');
+        };
+    }, []);
+
+    const setRef = useCallback((eRef: HTMLDivElement) => {
+        // console.log('GridComp setRef', eRef);
+        eRootWrapperRef.current = eRef;
     }, []);
 
     // initialise the extra components
     useEffect(() => {
         const gridCtrl = gridCtrlRef.current;
         const eRootWrapper = eRootWrapperRef.current;
-        if (!tabGuardReady || !beans || !gridCtrl || !eGridBodyParent || !eRootWrapper) {
+        if (!tabGuardReady || !beans || !gridCtrl || !eRootWrapper) {
+            //!eGridBodyParentRef.current
+            // console.log('not ready', beans);
             return;
         }
 
@@ -126,7 +145,7 @@ const GridComp = ({ context }: GridCompProps) => {
         if (sideBarSelector) {
             const sideBarComp = context.createBean(new sideBarSelector.component());
             const eGui = sideBarComp.getGui();
-            const bottomTabGuard = eGridBodyParent.querySelector('.ag-tab-guard-bottom');
+            const bottomTabGuard = eGridBodyParentRef.current!.querySelector('.ag-tab-guard-bottom');
             if (bottomTabGuard) {
                 bottomTabGuard.insertAdjacentElement('beforebegin', eGui);
                 additionalEls.push(eGui);
@@ -165,7 +184,7 @@ const GridComp = ({ context }: GridCompProps) => {
                 el.parentElement?.removeChild(el);
             });
         };
-    }, [tabGuardReady, eGridBodyParent, beans]);
+    }, [tabGuardReady, beans]); //eGridBodyParent
 
     const rootWrapperClasses = useMemo(
         () => classesList('ag-root-wrapper', rtlClass, layoutClass),
@@ -190,16 +209,20 @@ const GridComp = ({ context }: GridCompProps) => {
         setTabGuardReady(ref !== null);
     }, []);
 
-    const isFocusable = useCallback(() => !gridCtrlRef.current?.isFocusable(), []);
+    const seteGridBodyRef = useCallback((ref: HTMLDivElement | null) => {
+        eGridBodyParentRef.current = ref;
+    }, []);
 
+    const isFocusable = useCallback(() => !gridCtrlRef.current?.isFocusable(), []);
+    console.log('gridComp render', initialised, eGridBodyParentRef.current, beans);
     return (
         <div ref={setRef} className={rootWrapperClasses} style={topStyle} role="presentation">
-            <div className={rootWrapperBodyClasses} ref={setGridBodyParent} role="presentation">
-                {initialised && eGridBodyParent && beans && (
+            <div className={rootWrapperBodyClasses} ref={seteGridBodyRef} role="presentation">
+                {initialised && beans && (
                     <BeansContext.Provider value={beans}>
                         <TabGuardComp
                             ref={setTabGuardCompRef}
-                            eFocusableElement={eGridBodyParent}
+                            eFocusableElement={eGridBodyParentRef.current!}
                             onTabKeyDown={onTabKeyDown}
                             gridCtrl={gridCtrlRef.current!}
                             forceFocusOutWhenTabGuardsAreEmpty={true}

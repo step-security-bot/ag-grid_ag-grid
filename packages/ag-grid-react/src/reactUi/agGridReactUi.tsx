@@ -94,8 +94,8 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
     // Hook to enable Portals to be displayed via the PortalManager
     const [, setPortalRefresher] = useState(0);
 
-    const setRef = useCallback((eRef: HTMLDivElement | null) => {
-        eGui.current = eRef;
+    useEffect(() => {
+        const eRef = eGui.current;
         if (!eRef) {
             destroyFuncs.current.forEach((f) => f());
             destroyFuncs.current.length = 0;
@@ -140,7 +140,7 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
         const gridParams: GridParams = {
             providedBeanInstances: {
                 frameworkCompWrapper: new ReactFrameworkComponentWrapper(
-                    portalManager.current,
+                    portalManager.current!,
                     mergedGridOps.reactiveCustomComponents ?? _getGlobalGridOption('reactiveCustomComponents') ?? true
                 ),
                 renderStatus,
@@ -156,6 +156,7 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
 
             destroyFuncs.current.push(() => {
                 context.destroy();
+                setContext(undefined);
             });
 
             // because React is Async, we need to wait for the UI to be initialised before exposing the API's
@@ -212,6 +213,15 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
         if (apiRef.current) {
             gridIdRef.current = apiRef.current.getGridId();
         }
+
+        return () => {
+            destroyFuncs.current.forEach((f) => f());
+            destroyFuncs.current.length = 0;
+        };
+    }, []);
+
+    const setRef = useCallback((eRef: HTMLDivElement | null) => {
+        eGui.current = eRef;
     }, []);
 
     const style = useMemo(() => {
@@ -239,6 +249,7 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
         });
     }, [props]);
 
+    // console.log('AgGridReactUi', { detroyed: context?.isDestroyed(), context, props });
     return (
         <div style={style} className={props.className} ref={setRef}>
             {context && !context.isDestroyed() ? <GridComp context={context} /> : null}
