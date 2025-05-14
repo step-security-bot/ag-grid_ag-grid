@@ -97,8 +97,8 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
     useEffect(() => {
         const eRef = eGui.current;
         if (!eRef) {
-            destroyFuncs.current.forEach((f) => f());
-            destroyFuncs.current.length = 0;
+            // destroyFuncs.current.forEach((f) => f());
+            // destroyFuncs.current.length = 0;
             return;
         }
 
@@ -249,7 +249,7 @@ export const AgGridReactUi = <TData,>(props: InternalAgGridReactProps<TData>) =>
         });
     }, [props]);
 
-    // console.log('AgGridReactUi', { detroyed: context?.isDestroyed(), context, props });
+    console.log('AgGridReactUi', { detroyed: context?.isDestroyed(), context, props });
     return (
         <div style={style} className={props.className} ref={setRef}>
             {context && !context.isDestroyed() ? <GridComp context={context} /> : null}

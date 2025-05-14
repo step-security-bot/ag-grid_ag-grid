@@ -42,20 +42,24 @@ const GridComp = ({ context }: GridCompProps) => {
 
     const onTabKeyDown = useCallback(() => undefined, []);
 
-    const beans = useMemo(() => {
-        if (context.isDestroyed()) {
-            return null;
-        }
-        return context.getBeans();
-    }, [context]);
+    // const beans = useMemo(() => {
+    //     if (context.isDestroyed()) {
+    //         return null;
+    //     }
+    //     return context.getBeans();
+    // }, [context]);
+    const beans = (context.isDestroyed() ? null : context.getBeans()) as any;
 
     useReactCommentEffect(' AG Grid ', eRootWrapperRef);
 
     useEffect(() => {
         console.log('GridComp useEffect');
 
-        if (initialised) {
-            console.log('GridComp useEffect already initialised');
+        // if (initialised) {
+        //     console.log('GridComp useEffect already initialised');
+        //     return;
+        // }
+        if (context.isDestroyed()) {
             return;
         }
 
@@ -104,8 +108,9 @@ const GridComp = ({ context }: GridCompProps) => {
 
         return () => {
             console.log('GridComp useEffect destroy');
+            setInitialised(false);
         };
-    }, []);
+    }, [context]);
 
     const setRef = useCallback((eRef: HTMLDivElement) => {
         // console.log('GridComp setRef', eRef);
@@ -214,7 +219,7 @@ const GridComp = ({ context }: GridCompProps) => {
     }, []);
 
     const isFocusable = useCallback(() => !gridCtrlRef.current?.isFocusable(), []);
-    console.log('gridComp render', initialised, eGridBodyParentRef.current, beans);
+    console.log('gridComp render', initialised, beans?.context?.isDestroyed(), eGridBodyParentRef.current);
     return (
         <div ref={setRef} className={rootWrapperClasses} style={topStyle} role="presentation">
             <div className={rootWrapperBodyClasses} ref={seteGridBodyRef} role="presentation">

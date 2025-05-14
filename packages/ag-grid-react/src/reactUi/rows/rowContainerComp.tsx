@@ -56,6 +56,10 @@ const RowContainerComp = ({ name }: { name: RowContainerName }) => {
     }, []);
 
     const setRef = useCallback(() => {
+        if (context.isDestroyed()) {
+            return;
+        }
+
         if (areElementsRemoved()) {
             rowContainerCtrlRef.current = context.destroyBean(rowContainerCtrlRef.current);
         }
@@ -133,7 +137,7 @@ const RowContainerComp = ({ name }: { name: RowContainerName }) => {
                 eViewport.current!
             );
         }
-    }, [areElementsReady, areElementsRemoved]);
+    }, [areElementsReady, areElementsRemoved, context]);
 
     const setContainerRef = useCallback(
         (e: HTMLDivElement | null) => {

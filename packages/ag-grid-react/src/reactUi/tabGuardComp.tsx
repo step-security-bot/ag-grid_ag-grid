@@ -49,6 +49,10 @@ const TabGuardCompRef: ForwardRefRenderFunction<TabGuardCompCallback, TabGuardPr
     }));
 
     const setupCtrl = useCallback(() => {
+        if (context.isDestroyed()) {
+            return;
+        }
+
         const topTabGuard = topTabGuardRef.current;
         const bottomTabGuard = bottomTabGuardRef.current;
         if (!topTabGuard && !bottomTabGuard) {
@@ -75,7 +79,7 @@ const TabGuardCompRef: ForwardRefRenderFunction<TabGuardCompCallback, TabGuardPr
                 })
             );
         }
-    }, []);
+    }, [context]);
 
     const setTopRef = useCallback(
         (e: HTMLDivElement | null) => {
