@@ -1,6 +1,6 @@
 import { AgColumn, BeanCollection, BeanStub, IEventEmitter, NamedBean, RowNode } from '../main';
 
-//https://plnkr.co/edit/ZFLxHnG6dDPnhC3v?open=main.js
+// https://plnkr.co/edit/VEnrHRAzelybyacZ?open=main.js
 const getFormula = (column: AgColumn, node: RowNode): string | null => {
     if (!node.data) {
         return null;
@@ -37,7 +37,7 @@ interface FormulaTree {
     operands: FormulaOperand[];
 }
 
-const parseOperand = (operand: string): Cell | number | string | boolean | null => {
+const parseOperand = (operand: string): Cell | number | string | boolean => {
     const trimmed = operand.trim();
     // string operand
     if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 2) {
@@ -57,7 +57,7 @@ const parseOperand = (operand: string): Cell | number | string | boolean | null 
         return num;
     }
 
-    const [row, column] = trimmed.split(':'); // cannot allow : in col or row ids
+    const [column, row] = trimmed.split(':'); // cannot allow : in col or row ids
     if (row && column) {
         return {
             rowId: row,
@@ -65,21 +65,28 @@ const parseOperand = (operand: string): Cell | number | string | boolean | null 
         };
     }
 
-    return null;
+    throw new FormulaError('Unsupported operand type ' + operand, '#NAME?');
 };
 
 /*
  * Parse a formula string into a tree structure.
  */
-const parse = (formula: string): FormulaTree | null => {
-    const resultStack: (FormulaTree & { startIndex: number })[] = [];
-    let lastProcessedIndex = 1; // the last processed index
+const parse = (formula: string): FormulaOperand => {
+    if (formula[0] !== '=') {
+        throw new FormulaError('Formula must start with =', '#PARSE!');
+    }
 
-    // start at 1 to skip the preceding '='
+    const resultStack: (FormulaTree & { startIndex?: number })[] = [];
+    let lastRealChar: number | null = null;
+
+    // start at 1 as 0 is always =
     for (let i = 1; i < formula.length; i++) {
         const char = formula[i];
         switch (char) {
             case '(': {
+                /**
+                 * When we hit an open bracket, add a new item to the result stack.
+                 */
                 const lastStack = resultStack[resultStack.length - 1];
                 const firstIndex = lastStack ? lastStack.startIndex : 1;
                 resultStack.push({
@@ -87,77 +94,113 @@ const parse = (formula: string): FormulaTree | null => {
                     operands: [],
                     startIndex: i + 1,
                 });
+                lastRealChar = null;
                 break;
             }
             case ')':
                 {
+                    /**
+                     * Closing a bracket means the previous item in the stack is complete.
+                     * Need to capture the last substring
+                     */
                     const formulaParent = resultStack[resultStack.length - 1];
-                    if (lastProcessedIndex !== i - 1) {
+                    if (lastRealChar !== null) {
                         const substr = formula.slice(formulaParent.startIndex, i);
-                        lastProcessedIndex = i;
 
                         const operand = parseOperand(substr);
                         if (operand === null) {
-                            return null; // error
+                            throw new FormulaError('Unexpected closing bracket at ' + i, '#PARSE!');
                         }
                         formulaParent.operands.push(operand);
                         formulaParent.startIndex = i + 1;
                     }
 
+                    // last character to process
                     if (i === formula.length - 1) {
-                        // TODO error if too many open stacks at end
+                        // not all stacks are closed
+                        if (resultStack.length !== 1) {
+                            throw new FormulaError('Open brackets without matching closing.', '#PARSE!');
+                        }
 
                         // if the last character is a closing bracket, we need to pop the last result{
                         return resultStack[0];
                     }
 
+                    if (resultStack.length === 1) {
+                        throw new FormulaError('Unexpected closing bracket at ' + i, '#PARSE!');
+                    }
+
                     // close the previous open bracket into the parents operands
                     const lastResult = resultStack[resultStack.length - 1];
                     const secondLastResult = resultStack[resultStack.length - 2];
+                    secondLastResult.startIndex = i + 1;
                     secondLastResult.operands.push(lastResult);
+                    delete lastResult.startIndex;
                     resultStack.length--;
+                    lastRealChar = null;
                 }
                 break;
-            case ',': {
-                if (lastProcessedIndex !== i - 1) {
+            case ',':
+                {
                     const formulaParent = resultStack[resultStack.length - 1];
-                    lastProcessedIndex = i;
-                    const substr = formula.slice(formulaParent.startIndex, i);
-                    const operand = parseOperand(substr);
-                    if (operand === null) {
-                        return null; // error
+                    if (lastRealChar !== null) {
+                        const substr = formula.slice(formulaParent.startIndex, i);
+                        const operand = parseOperand(substr);
+                        if (operand === null) {
+                            throw new FormulaError('Unsupported operand ' + operand, '#PARSE!');
+                        }
+                        formulaParent.operands.push(operand);
                     }
-                    formulaParent.operands.push(operand);
                     formulaParent.startIndex = i + 1;
+                    lastRealChar = null;
+                }
+                break;
+            default: {
+                if (lastRealChar === null) {
+                    lastRealChar = i;
                 }
             }
         }
     }
-    return null;
+    if (resultStack.length > 0) {
+        throw new FormulaError('Open brackets without matching closing.', '#PARSE!');
+    }
+    return parseOperand(formula.slice(1));
 };
+class FormulaError extends Error {
+    override name: string = 'FormulaError';
+    constructor(
+        message: string,
+        public type: '#REF!' | '#NAME?' | '#CIRCREF!' | '#PARSE!'
+    ) {
+        super(message);
+    }
+}
 
-const resolveFormula = (beans: BeanCollection, formula: FormulaTree): any => {
+const resolveFormula = (beans: BeanCollection, formula: FormulaOperand): any => {
+    if (typeof formula !== 'object') {
+        return formula;
+    }
+
+    // cell
+    if ('rowId' in formula && 'columnId' in formula) {
+        const cellNode = beans.rowModel.getRowNode(formula.rowId);
+        const cellColumn = beans.colModel.getColById(formula.columnId);
+        if (!cellNode || !cellColumn) {
+            throw new FormulaError('Unknown reference to cell', '#REF!');
+        }
+
+        return beans.valueSvc.getValue(cellColumn, cellNode);
+    }
+
+    // formula tree
     const { operation, operands } = formula;
     const operationFn = beans.formulae?.getFunction(operation);
     if (!operationFn) {
-        throw Error('#NAME?');
+        throw new FormulaError('Unsupported operation ' + operation, '#NAME?');
     }
 
-    const operandValues = operands.map((operand) => {
-        if (typeof operand !== 'object') {
-            return operand;
-        }
-        if ('rowId' in operand && 'columnId' in operand) {
-            const cellNode = beans.rowModel.getRowNode(operand.rowId);
-            const cellColumn = beans.colModel.getColById(operand.columnId);
-            if (!cellNode || !cellColumn) {
-                throw Error('#REF!');
-            }
-
-            return beans.valueSvc.getValue(cellColumn, cellNode); // cyclic issues
-        }
-        return resolveFormula(beans, operand);
-    });
+    const operandValues = operands.map(resolveFormula.bind(null, beans));
     return operationFn(...operandValues);
 };
 
@@ -170,11 +213,11 @@ class CellFormula {
         private readonly beans: BeanCollection
     ) {}
 
-    private formula: FormulaTree | null = null;
+    private formula: FormulaOperand | null = null;
     private value: any = null;
     private valueStale = true;
     private treeStale: boolean = true;
-    private error: string | null = null;
+    public error: FormulaError | null = null;
 
     private setFormulaString(formulaString: string) {
         if (this.formulaString === formulaString) {
@@ -192,7 +235,10 @@ class CellFormula {
 
     public getValue() {
         if (!this.valueStale) {
-            return this.error ?? this.value;
+            if (this.error) {
+                throw this.error;
+            }
+            return this.value;
         }
 
         if (this.treeStale) {
@@ -204,14 +250,16 @@ class CellFormula {
         }
 
         if (!this.formula) {
-            return null;
+            throw new FormulaError('Formula parsing error', '#PARSE!');
         }
 
         this.valueStale = false;
+
         try {
             return (this.value = resolveFormula(this.beans, this.formula));
         } catch (e) {
-            return (this.error = e.message);
+            this.error = e;
+            throw e; // catch error to set into this cache. and then throw error up to the next level
         }
     }
 }
@@ -253,10 +301,23 @@ export class FormulaeService extends BeanStub implements NamedBean {
         return !!formula;
     }
 
+    public getFormulaError(column: AgColumn, node: RowNode): FormulaError | null {
+        const rowFormulas = this.cachedResult.get(node);
+        if (!rowFormulas) {
+            return null;
+        }
+        const cellFormula = rowFormulas.get(column);
+        if (!cellFormula) {
+            return null;
+        }
+        return cellFormula.error;
+    }
+
     public getFunction(name: string) {
         return this.supportedOperations.get(name);
     }
 
+    private circularRefSet: WeakSet<CellFormula> | null = null;
     public resolveValue(column: AgColumn, node: RowNode): any {
         const formulaString = getFormula(column, node);
         if (!formulaString) {
@@ -275,6 +336,27 @@ export class FormulaeService extends BeanStub implements NamedBean {
             rowFormulas.set(column, cellFormula);
         }
 
-        return cellFormula.getValue();
+        // if no circular ref checker, create one
+        if (!this.circularRefSet) {
+            this.circularRefSet = new WeakSet([cellFormula]);
+            try {
+                const value = cellFormula.getValue();
+                this.circularRefSet = null;
+                return value;
+            } catch (e) {
+                this.circularRefSet = null;
+                cellFormula.error = e;
+                return e.type;
+            }
+        }
+
+        if (this.circularRefSet.has(cellFormula)) {
+            cellFormula.error = new FormulaError('Circular reference', '#CIRCREF!');
+            throw cellFormula.error;
+        }
+        this.circularRefSet.add(cellFormula);
+        const value = cellFormula.getValue();
+        this.circularRefSet.delete(cellFormula);
+        return value;
     }
 }

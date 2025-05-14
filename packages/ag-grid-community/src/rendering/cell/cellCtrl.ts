@@ -492,6 +492,11 @@ export class CellCtrl extends BeanStub {
 
             this.customStyleFeature?.applyUserStyles();
             this.customStyleFeature?.applyClassesFromColDef();
+
+            this.eGui.classList.toggle(
+                'formula-error',
+                !!this.beans.formulae?.getFormulaError(this.column, this.rowNode)
+            );
         }
 
         this.tooltipFeature?.refreshTooltip();
