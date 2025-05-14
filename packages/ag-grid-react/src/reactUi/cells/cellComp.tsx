@@ -111,6 +111,12 @@ const jsxEditValue = (
     );
 };
 
+const SkeletonCellRenderer = () => (
+    <div className="ag-skeleton-container" aria-label="Cell Component is loading">
+        <div className="ag-skeleton-effect"></div>
+    </div>
+);
+
 const jsxShowValue = (
     showDetails: RenderDetails,
     key: number,
@@ -122,27 +128,30 @@ const jsxShowValue = (
 ) => {
     const { compDetails, value } = showDetails;
 
-    const noCellRenderer = !compDetails;
-    const reactCellRenderer = compDetails && compDetails.componentFromFramework;
+    let bodyJsxFunc: () => React.JSX.Element | null = () => null;
 
-    const CellRendererClass = compDetails && compDetails.componentClass;
+    if (!compDetails) {
+        // no cell renderer, so just show the value
+        // if we didn't do this, objects would cause React error. we depend on objects for things
+        // like the aggregation functions avg and count, which return objects and depend on toString()
+        // getting called.
+        bodyJsxFunc = () => <>{value?.toString ? value.toString() : value}</>;
+    } else {
+        const reactCellRenderer = compDetails.componentFromFramework;
+        const CellRendererClass = compDetails.componentClass;
+        const params = compDetails.params;
 
-    // if we didn't do this, objects would cause React error. we depend on objects for things
-    // like the aggregation functions avg and count, which return objects and depend on toString()
-    // getting called.
-    const valueForNoCellRenderer = value?.toString ? value.toString() : value;
-
-    const bodyJsxFunc = () => (
-        <>
-            {noCellRenderer && <>{valueForNoCellRenderer}</>}
-            {reactCellRenderer && !reactCellRendererStateless && (
-                <CellRendererClass {...compDetails!.params} key={key} ref={cellRendererRef} />
-            )}
-            {reactCellRenderer && reactCellRendererStateless && (
-                <CellRendererClass {...compDetails!.params} key={key} />
-            )}
-        </>
-    );
+        bodyJsxFunc = () =>
+            reactCellRenderer ? (
+                <React.Suspense fallback={params?.fallback ?? SkeletonCellRenderer()}>
+                    {!reactCellRendererStateless ? (
+                        <CellRendererClass {...params} key={key} ref={cellRendererRef} />
+                    ) : (
+                        <CellRendererClass {...params} key={key} />
+                    )}
+                </React.Suspense>
+            ) : null;
+    }
 
     return (
         <>
