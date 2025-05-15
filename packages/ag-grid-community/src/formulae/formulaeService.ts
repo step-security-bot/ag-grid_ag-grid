@@ -57,8 +57,10 @@ const parseOperand = (operand: string): Cell | number | string | boolean => {
         return num;
     }
 
-    const [column, row] = trimmed.split(':'); // cannot allow : in col or row ids
-    if (row && column) {
+    const cellRegex = /^([A-Z]+)([0-9]+)$/; // replace characters with localised version
+    const match = trimmed.match(cellRegex);
+    if (match) {
+        const [, column, row] = match;
         return {
             rowId: row,
             columnId: column,
@@ -185,7 +187,7 @@ const resolveFormula = (beans: BeanCollection, formula: FormulaOperand): any => 
     // cell
     if ('rowId' in formula && 'columnId' in formula) {
         const cellNode = beans.rowModel.getRowNode(formula.rowId);
-        const cellColumn = beans.colModel.getColById(formula.columnId);
+        const cellColumn = beans.formulae!.getColByRef(formula.columnId);
         if (!cellNode || !cellColumn) {
             throw new FormulaError('Unknown reference to cell', '#REF!');
         }
@@ -268,6 +270,7 @@ export class FormulaeService extends BeanStub implements NamedBean {
     beanName = 'formulae' as const;
 
     private cachedResult = new WeakMap<RowNode, WeakMap<AgColumn, CellFormula>>();
+    private colRefMap = new Map<string, AgColumn>();
 
     private supportedOperations = new Map([
         ['SUM', (...args: any[]) => args.reduce((acc, curr) => curr + acc, 0)], // should also support objects, and throw if wrong type provided
@@ -287,6 +290,45 @@ export class FormulaeService extends BeanStub implements NamedBean {
         Object.keys(customFuncs).forEach((name) => {
             this.supportedOperations.set(name, customFuncs[name]!);
         });
+
+        // set up the column reference map
+        this.addManagedListeners(this.beans.eventSvc, {
+            newColumnsLoaded: () => {
+                // done this way so easily localised.
+                const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+                const alphabetLen = alphabet.length;
+                const list = this.beans.colModel.colDefCols?.list;
+                const map = new Map<string, AgColumn>();
+                list?.forEach((col, idx) => {
+                    let str = '';
+                    let remaining = idx;
+                    while (true) {
+                        str = alphabet[remaining % alphabetLen] + str;
+
+                        if (remaining < alphabetLen) {
+                            break;
+                        }
+
+                        remaining = Math.floor(remaining / alphabetLen) - 1;
+                    }
+                    map.set(str.toUpperCase(), col); // uppercase unnecessary - respect alphabet
+                });
+                this.colRefMap = map;
+            },
+        });
+    }
+
+    public getColByRef(ref: string): AgColumn | null {
+        return this.colRefMap.get(ref) ?? null;
+    }
+
+    public getColRef(col: AgColumn): string | null {
+        for (const [key, value] of this.colRefMap.entries()) {
+            if (value === col) {
+                return key;
+            }
+        }
+        return null;
     }
 
     // temp, when value changes, clear all cached results
