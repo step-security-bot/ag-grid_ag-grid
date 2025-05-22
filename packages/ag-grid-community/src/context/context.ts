@@ -180,7 +180,8 @@ export type UserComponentName =
     | 'agTotalRowCountComponent'
     | 'agFilteredRowCountComponent'
     | 'agTotalAndFilteredRowCountComponent'
-    | 'agFindCellRenderer';
+    | 'agFindCellRenderer'
+    | 'agFormulaEditor';
 
 export type ClassImp = new (...args: []) => object;
 export type ComponentMeta =

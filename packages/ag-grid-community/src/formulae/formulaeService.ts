@@ -1,4 +1,12 @@
-import { AgColumn, BeanCollection, BeanStub, IEventEmitter, NamedBean, RowNode } from '../main';
+import {
+    AgColumn,
+    BeanCollection,
+    BeanStub,
+    IEventEmitter,
+    NamedBean,
+    RangeSelectionChangedEvent,
+    RowNode,
+} from '../main';
 
 // https://plnkr.co/edit/VEnrHRAzelybyacZ?open=main.js
 const getFormula = (column: AgColumn, node: RowNode): string | null => {
@@ -28,6 +36,8 @@ const getFormula = (column: AgColumn, node: RowNode): string | null => {
 interface Cell {
     rowId: string;
     columnId: string;
+    endRowId?: string;
+    endColumnId?: string;
 }
 
 type FormulaOperand = FormulaTree | Cell | number | string | boolean;
@@ -37,7 +47,7 @@ interface FormulaTree {
     operands: FormulaOperand[];
 }
 
-const parseOperand = (operand: string): Cell | number | string | boolean => {
+const parseOperand = (operand: string): Cell | number | string | boolean | null => {
     const trimmed = operand.trim();
     // string operand
     if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 2) {
@@ -57,25 +67,28 @@ const parseOperand = (operand: string): Cell | number | string | boolean => {
         return num;
     }
 
-    const cellRegex = /^([A-Z]+)([0-9]+)$/; // replace characters with localised version
+    const cellRegex = /^([A-Z]+)([0-9]+)(?::([A-Z]+)([0-9]+))?$/; // replace characters with localised alphabet
     const match = trimmed.match(cellRegex);
     if (match) {
-        const [, column, row] = match;
+        const [, column, row, endColumn, endRow] = match;
         return {
             rowId: row,
             columnId: column,
+            endRowId: endRow,
+            endColumnId: endColumn,
         };
     }
 
-    throw new FormulaError('Unsupported operand type ' + operand, '#NAME?');
+    return null;
 };
 
 /*
  * Parse a formula string into a tree structure.
+ * @param editMode - if true, the formula may be incomplete and skips warning for missing end brackets, instead returning the open segment
  */
-const parse = (formula: string): FormulaOperand => {
+export const parseFormula = (formula: string, editMode: boolean = false): FormulaOperand => {
     if (formula[0] !== '=') {
-        throw new FormulaError('Formula must start with =', '#PARSE!');
+        throw new FormulaParseError('Formulas must begin with =', 0, 1);
     }
 
     const resultStack: (FormulaTree & { startIndex?: number })[] = [];
@@ -111,7 +124,7 @@ const parse = (formula: string): FormulaOperand => {
 
                         const operand = parseOperand(substr);
                         if (operand === null) {
-                            throw new FormulaError('Unexpected closing bracket at ' + i, '#PARSE!');
+                            throw new FormulaParseError('Unsupported operand ' + operand, formulaParent.startIndex!, i);
                         }
                         formulaParent.operands.push(operand);
                         formulaParent.startIndex = i + 1;
@@ -120,16 +133,20 @@ const parse = (formula: string): FormulaOperand => {
                     // last character to process
                     if (i === formula.length - 1) {
                         // not all stacks are closed
-                        if (resultStack.length !== 1) {
-                            throw new FormulaError('Open brackets without matching closing.', '#PARSE!');
+                        if (resultStack.length !== 1 && !editMode) {
+                            throw new FormulaParseError(
+                                'Open brackets without matching closing.',
+                                resultStack[resultStack.length - 1].startIndex!,
+                                resultStack[resultStack.length - 1].startIndex!
+                            );
                         }
 
                         // if the last character is a closing bracket, we need to pop the last result{
-                        return resultStack[0];
+                        return resultStack[resultStack.length - 1];
                     }
 
                     if (resultStack.length === 1) {
-                        throw new FormulaError('Unexpected closing bracket at ' + i, '#PARSE!');
+                        throw new FormulaParseError('Unexpected closing bracket', i, i + 1);
                     }
 
                     // close the previous open bracket into the parents operands
@@ -149,7 +166,11 @@ const parse = (formula: string): FormulaOperand => {
                         const substr = formula.slice(formulaParent.startIndex, i);
                         const operand = parseOperand(substr);
                         if (operand === null) {
-                            throw new FormulaError('Unsupported operand ' + operand, '#PARSE!');
+                            throw new FormulaParseError(
+                                'Unsupported operand ' + operand,
+                                formulaParent.startIndex!,
+                                i + 1
+                            );
                         }
                         formulaParent.operands.push(operand);
                     }
@@ -165,9 +186,17 @@ const parse = (formula: string): FormulaOperand => {
         }
     }
     if (resultStack.length > 0) {
-        throw new FormulaError('Open brackets without matching closing.', '#PARSE!');
+        // if edit mode we return the currently open segment, and not error.
+        if (editMode) {
+            return resultStack[resultStack.length - 1];
+        }
+        throw new FormulaParseError('Expected closing bracket.', formula.length - 1, formula.length);
     }
-    return parseOperand(formula.slice(1));
+    const operand = parseOperand(formula.slice(1));
+    if (operand == null) {
+        throw new FormulaParseError('Unsupported operand ' + operand, 1, formula.length);
+    }
+    return operand;
 };
 class FormulaError extends Error {
     override name: string = 'FormulaError';
@@ -176,6 +205,16 @@ class FormulaError extends Error {
         public type: '#REF!' | '#NAME?' | '#CIRCREF!' | '#PARSE!'
     ) {
         super(message);
+    }
+}
+
+export class FormulaParseError extends FormulaError {
+    constructor(
+        message: string,
+        public errorStart: number,
+        public errorEnd: number
+    ) {
+        super(message, '#PARSE!');
     }
 }
 
@@ -244,7 +283,7 @@ class CellFormula {
         }
 
         if (this.treeStale) {
-            const parsedFormula = parse(this.formulaString);
+            const parsedFormula = parseFormula(this.formulaString);
             if (parsedFormula) {
                 this.formula = parsedFormula;
             }
@@ -343,6 +382,10 @@ export class FormulaeService extends BeanStub implements NamedBean {
         return !!formula;
     }
 
+    public getFormula(column: AgColumn, node: RowNode): string | null {
+        return getFormula(column, node);
+    }
+
     public getFormulaError(column: AgColumn, node: RowNode): FormulaError | null {
         const rowFormulas = this.cachedResult.get(node);
         if (!rowFormulas) {
@@ -401,4 +444,26 @@ export class FormulaeService extends BeanStub implements NamedBean {
         this.circularRefSet.delete(cellFormula);
         return value;
     }
+
+    public isWritingFormula = () => {
+        const activeElement = document.activeElement;
+        if (!activeElement) {
+            return false;
+        }
+        if (activeElement.tagName !== 'INPUT' || activeElement.getAttribute('type') !== 'text') {
+            return false;
+        }
+
+        const currentValue = (activeElement as HTMLInputElement).value;
+        if (currentValue[0] !== '=') {
+            return false;
+        }
+
+        const trimmed = currentValue.trim();
+        const lastChar = trimmed[trimmed.length - 1];
+        if (lastChar !== '(' && lastChar !== ',' && lastChar !== '=') {
+            return false;
+        }
+        return this.beans.focusSvc.doesRowOrCellHaveBrowserFocus();
+    };
 }

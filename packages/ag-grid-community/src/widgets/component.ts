@@ -421,4 +421,5 @@ export type AgComponentSelector =
     | 'AG-SORT-INDICATOR'
     | 'AG-STATUS-BAR'
     | 'AG-TOGGLE-BUTTON'
-    | 'AG-WATERMARK';
+    | 'AG-WATERMARK'
+    | 'AG-FORMULA-INPUT-FIELD';
