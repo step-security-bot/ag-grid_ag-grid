@@ -220,7 +220,7 @@
                 "path": "./column-moving/#suppress-move-when-dragging"
             }
         ],
-        "notesPath": "./ag-grid-32-2--release-notes1"
+        "notesPath": "./ag-grid-32-2-1-release-notes"
     },
     {
         "version": "32.1.0",
@@ -247,7 +247,7 @@
                 "text": "Scrolling Improvements"
             }
         ],
-        "notesPath": "./ag-grid-32--release-notes1"
+        "notesPath": "./ag-grid-32-1-release-notes"
     },
     {
         "version": "32.0.2",
@@ -281,7 +281,7 @@
                 "path": "./accessibility"
             }
         ],
-        "notesPath": "./ag-grid-3-release-notes2"
+        "notesPath": "./ag-grid-32-release-notes"
     },
     {
         "version": "31.3.4",
@@ -317,7 +317,7 @@
             }
         ],
         "versionType": "Minor",
-        "notesPath": "./ag-grid-31--release-notes3"
+        "notesPath": "./ag-grid-31-3-release-notes"
     },
     {
         "version": "31.3.0",
@@ -353,7 +353,7 @@
                 "path": "./ag-grid-design-system"
             }
         ],
-        "notesPath": "./ag-grid-31--release-notes2"
+        "notesPath": "./ag-grid-31-2-release-notes"
     },
     {
         "version": "31.1.1",
@@ -385,7 +385,7 @@
                 "path": "./server-side-model-sorting/#client-side-sorting"
             }
         ],
-        "notesPath": "./ag-grid-31--release-notes1"
+        "notesPath": "./ag-grid-31-1-release-notes"
     },
     {
         "version": "31.0.3",
@@ -425,7 +425,7 @@
                 "path": "./row-pagination/#top"
             }
         ],
-        "notesPath": "./ag-grid-3-release-notes1"
+        "notesPath": "./ag-grid-31-release-notes"
     },
     {
         "version": "30.2.1",
@@ -530,7 +530,7 @@
                 "text": "Export Row Groups to Excel with Their Current Expanded State"
             }
         ],
-        "notesPath": "./ag-grid-3-release-notes0"
+        "notesPath": "./ag-grid-30-release-notes"
     },
     {
         "version": "29.3.5",
@@ -607,7 +607,7 @@
     {
         "version": "29.0.0",
         "date": "January 13th, 2023",
-        "notesPath": "./ag-grid-2-release-notes9"
+        "notesPath": "./ag-grid-29-release-notes"
     },
     {
         "version": "28.2.1",
@@ -639,7 +639,7 @@
     {
         "version": "28.0.0",
         "date": "July 6th, 2022",
-        "notesPath": "./ag-grid-2-release-notes8"
+        "notesPath": "./ag-grid-28-release-notes"
     },
     {
         "version": "27.3.0",
@@ -665,7 +665,7 @@
     {
         "version": "27.0.0",
         "date": "February 8th, 2022",
-        "notesPath": "./ag-grid-2-release-notes7"
+        "notesPath": "./ag-grid-27-release-notes"
     },
     {
         "version": "26.2.1",
@@ -683,7 +683,7 @@
     {
         "version": "26.0.0",
         "date": "August 18th, 2021",
-        "notesPath": "./ag-grid-2-release-notes6"
+        "notesPath": "./ag-grid-26-release-notes"
     },
     {
         "version": "25.3.0",
