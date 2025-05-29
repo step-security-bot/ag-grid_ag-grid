@@ -253,6 +253,19 @@ const reactLandingPage = defineCollection({
     ),
 });
 
+const legacyReleaseNotes = defineCollection({
+    loader: glob({ base: './src/content/legacy-release-notes', pattern: 'legacy-release-notes.json' }),
+    schema: z.array(
+        z.object({
+            'release version': z.string(),
+            markdown: z.string().optional(),
+            'feature highlights': z.string().optional(),
+            'breaking changes': z.string().optional(),
+            deprecations: z.string().optional(),
+        })
+    ),
+});
+
 export const collections = {
     docs,
     apiDocumentation,
@@ -270,4 +283,5 @@ export const collections = {
     siteHeader,
     seedProjects,
     reactLandingPage,
+    legacyReleaseNotes,
 };
