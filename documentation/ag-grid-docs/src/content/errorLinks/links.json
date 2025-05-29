@@ -257,6 +257,11 @@
         "url": "./aggregation/"
     },
     {
+        "errorIds": [109],
+        "text": "Aggregation - Custom Functions",
+        "url": "./aggregation-custom-functions/"
+    },
+    {
         "errorIds": [124, 125],
         "text": "Application Created Charts",
         "url": "./integrated-charts-application-created/"
