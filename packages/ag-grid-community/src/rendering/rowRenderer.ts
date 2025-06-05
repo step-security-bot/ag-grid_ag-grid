@@ -473,7 +473,7 @@ export class RowRenderer extends BeanStub implements NamedBean {
         return res;
     }
 
-    public refreshFloatingRowComps(recycleRows = true): void {
+    private refreshFloatingRowComps(recycleRows = true): void {
         this.refreshFloatingRows(this.topRowCtrls, 'top', recycleRows);
 
         this.refreshFloatingRows(this.bottomRowCtrls, 'bottom', recycleRows);

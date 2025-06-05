@@ -1097,6 +1097,7 @@ export {
     _preserveRangesWhile,
     _requestAnimationFrame,
     _isElementOverflowingCallback,
+    _addOrRemoveAttributes,
 } from './utils/dom';
 export { _selectAllCells } from './utils/selection';
 export { _stopPropagationForAgGrid, _isStopPropagationForAgGrid, _isElementInEventPath } from './utils/event';
