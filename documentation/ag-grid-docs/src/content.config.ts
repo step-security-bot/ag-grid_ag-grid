@@ -266,6 +266,10 @@ const legacyReleaseNotes = defineCollection({
     ),
 });
 
+const whatsNewContent = defineCollection({
+    loader: glob({ pattern: '**/[^_]*.mdoc', base: './src/content/whats-new' }),
+});
+
 export const collections = {
     docs,
     apiDocumentation,
@@ -284,4 +288,5 @@ export const collections = {
     seedProjects,
     reactLandingPage,
     legacyReleaseNotes,
+    whatsNewContent,
 };
