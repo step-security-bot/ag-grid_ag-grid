@@ -13,6 +13,7 @@ import type {
     RowPinnedType,
 } from 'ag-grid-community';
 import {
+    CheckboxEditorModule,
     ClientSideRowModelApiModule,
     ClientSideRowModelModule,
     HighlightChangesModule,
@@ -63,6 +64,7 @@ ModuleRegistry.registerModules([
     StatusBarModule,
     IntegratedChartsModule.with(AgChartsEnterpriseModule),
     RowSelectionModule,
+    CheckboxEditorModule,
     ValidationModule /* Development Only */,
 ]);
 
