@@ -82,6 +82,8 @@ export interface ICellComp {
         reactiveCustomComponents?: boolean
     ): void;
     refreshEditStyles: (editing: boolean, isPopup: boolean) => void;
+
+    setAttributes(attrs: Record<string, string | undefined>): void;
 }
 
 export const DOM_DATA_KEY_CELL_CTRL = 'cellCtrl';
