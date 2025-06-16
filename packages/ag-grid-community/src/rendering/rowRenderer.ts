@@ -33,7 +33,7 @@ import { _requestAnimationFrame } from '../utils/dom';
 import { _exists } from '../utils/generic';
 import { _errMsg } from '../validation/logging';
 import type { CellCtrl } from './cell/cellCtrl';
-import type { RowCtrlInstanceId, SharedProxyArray } from './row/rowCtrl';
+import type { RowCtrlInstanceId, SharedProxyArray, SharedProxyArrayWithFirstElementAndLength } from './row/rowCtrl';
 import { sharedProxyArrayMethods } from './row/rowCtrl';
 import { RowCtrl } from './row/rowCtrl';
 import type { RowContainerHeightService } from './rowContainerHeightService';
@@ -899,7 +899,10 @@ export class RowRenderer extends BeanStub implements NamedBean {
 
     // returns CellCtrl's that match the provided rowNodes and columns. eg if one row node
     // and two columns provided, that identifies 4 cells, so 4 CellCtrl's returned.
-    public getCellCtrls(rowNodes?: IRowNode[] | null, columns?: (string | AgColumn)[]): SharedProxyArray<CellCtrl> {
+    public getCellCtrls(
+        rowNodes?: IRowNode[] | null,
+        columns?: (string | AgColumn)[]
+    ): SharedProxyArrayWithFirstElementAndLength<CellCtrl> {
         let colIdsMap: any;
         if (_exists(columns)) {
             colIdsMap = {};
@@ -913,6 +916,12 @@ export class RowRenderer extends BeanStub implements NamedBean {
         const self = this;
         return {
             ...sharedProxyArrayMethods,
+            get [0]() {
+                return self.getRowCtrls(rowNodes)[0]?.getAllCellCtrls?.()?.[0];
+            },
+            get length() {
+                return self.getRowCtrls(rowNodes).reduce((acc, rowCtrl) => acc + rowCtrl.getAllCellCtrls().length, 0);
+            },
             forEach(callbackfn: (value: CellCtrl) => void) {
                 const rowCtrls = self.getRowCtrls(rowNodes);
                 for (let i = 0; i < rowCtrls.length; i++) {

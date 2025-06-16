@@ -1351,8 +1351,14 @@ export class RowCtrl extends BeanStub<RowCtrlEvent> {
         // this optimization is here to avoid having to create a new array every time we want to iterate
         return {
             ...sharedProxyArrayMethods,
-            [0]: self.centerCellCtrls.list[0] ?? self.leftCellCtrls.list[0] ?? self.rightCellCtrls.list[0],
-            length: self.centerCellCtrls.list.length + self.leftCellCtrls.list.length + self.rightCellCtrls.list.length,
+            get [0]() {
+                return self.centerCellCtrls.list[0] ?? self.leftCellCtrls.list[0] ?? self.rightCellCtrls.list[0];
+            },
+            get length() {
+                return (
+                    self.centerCellCtrls.list.length + self.leftCellCtrls.list.length + self.rightCellCtrls.list.length
+                );
+            },
             forEach(callbackfn: (value: CellCtrl) => void) {
                 for (let i = 0; i < self.centerCellCtrls.list.length; i++) {
                     callbackfn(self.centerCellCtrls.list[i]);
@@ -1854,7 +1860,7 @@ export type SharedProxyArrayWithFirstElementAndLength<T> = SharedProxyArray<T> &
  * see AG-12347
  */
 export const sharedProxyArrayMethods = {
-    forEach<T extends CellCtrl>(_callbackfn: (value: T) => void) {}, // placeholder, meant to be overridden
+    forEach<T extends CellCtrl>(_callbackfn: (value: T) => void) {},
     find<T extends CellCtrl>(predicate: (value: T) => boolean): T | undefined {
         let element: T | undefined;
         let found = false;
