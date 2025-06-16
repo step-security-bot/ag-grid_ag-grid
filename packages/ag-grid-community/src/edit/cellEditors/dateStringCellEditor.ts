@@ -1,5 +1,6 @@
 import type { DataTypeService } from '../../columns/dataTypeService';
 import type { AgColumn } from '../../entities/agColumn';
+import type { LocaleTextFunc } from '../../misc/locale/localeUtils';
 import { _parseDateTimeFromString, _serialiseDate } from '../../utils/date';
 import type { ElementParams } from '../../utils/dom';
 import { _exists } from '../../utils/generic';
@@ -11,46 +12,101 @@ import { SimpleCellEditor } from './simpleCellEditor';
 
 const DateStringCellElement: ElementParams = {
     tag: 'ag-input-date-field',
-    ref: 'eInput',
+    ref: 'eEditor',
     cls: 'ag-cell-editor',
 };
 class DateStringCellEditorInput implements CellEditorInput<string, IDateStringCellEditorParams, AgInputDateField> {
-    private eInput: AgInputDateField;
+    private eEditor: AgInputDateField;
     private params: IDateStringCellEditorParams;
     private includeTime: boolean | undefined;
 
-    constructor(private getDataTypeService: () => DataTypeService | undefined) {}
+    constructor(
+        private getDataTypeService: () => DataTypeService | undefined,
+        private getLocaleTextFunc: () => LocaleTextFunc
+    ) {}
 
     public getTemplate(): ElementParams {
         return DateStringCellElement;
     }
+
     public getAgComponents() {
         return [AgInputDateFieldSelector];
     }
 
-    public init(eInput: AgInputDateField, params: IDateStringCellEditorParams): void {
-        this.eInput = eInput;
+    public init(eEditor: AgInputDateField, params: IDateStringCellEditorParams): void {
+        this.eEditor = eEditor;
         this.params = params;
+
         const { min, max, step, colDef } = params;
+
         if (min != null) {
-            eInput.setMin(min);
+            eEditor.setMin(min);
         }
+
         if (max != null) {
-            eInput.setMax(max);
+            eEditor.setMax(max);
         }
+
         if (step != null) {
-            eInput.setStep(step);
+            eEditor.setStep(step);
         }
         this.includeTime =
             params.includeTime ?? this.getDataTypeService()?.getDateIncludesTimeFlag?.(colDef.cellDataType);
         if (this.includeTime != null) {
-            eInput.setIncludeTime(this.includeTime);
+            eEditor.setIncludeTime(this.includeTime);
         }
     }
 
+    public getValidationErrors(): string[] | null {
+        const { eEditor, params } = this;
+        const raw = eEditor.getInputElement().value;
+        const value = this.formatDate(this.parseDate(raw ?? undefined));
+        const { min, max, getValidationErrors } = params;
+        let internalErrors: string[] | null = [];
+
+        if (value) {
+            const date = new Date(value);
+            const translate = this.getLocaleTextFunc();
+
+            if (min) {
+                const minDate = new Date(min);
+                if (date < minDate) {
+                    const minDateString = minDate.toLocaleDateString();
+                    internalErrors.push(
+                        translate('minDateValidation', `Date must be after ${minDateString}`, [minDateString])
+                    );
+                }
+            }
+
+            if (max) {
+                const maxDate = new Date(max);
+                if (date > maxDate) {
+                    const maxDateString = maxDate.toLocaleDateString();
+                    internalErrors.push(
+                        translate('maxDateValidation', `Date must be before ${maxDateString}`, [maxDateString])
+                    );
+                }
+            }
+        }
+
+        if (!internalErrors.length) {
+            internalErrors = null;
+        }
+
+        if (getValidationErrors) {
+            return getValidationErrors({
+                value: this.getValue(),
+                cellEditorParams: params,
+                internalErrors,
+            });
+        }
+
+        return internalErrors;
+    }
+
     public getValue(): string | null | undefined {
-        const { params, eInput } = this;
-        const value = this.formatDate(eInput.getDate());
+        const { params, eEditor } = this;
+        const value = this.formatDate(eEditor.getDate());
         if (!_exists(value) && !_exists(params.value)) {
             return params.value;
         }
@@ -78,6 +134,11 @@ class DateStringCellEditorInput implements CellEditorInput<string, IDateStringCe
 
 export class DateStringCellEditor extends SimpleCellEditor<string, IDateStringCellEditorParams, AgInputDateField> {
     constructor() {
-        super(new DateStringCellEditorInput(() => this.beans.dataTypeSvc));
+        super(
+            new DateStringCellEditorInput(
+                () => this.beans.dataTypeSvc,
+                () => this.getLocaleTextFunc()
+            )
+        );
     }
 }
