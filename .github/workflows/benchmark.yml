@@ -204,6 +204,7 @@ jobs:
           COMMENT: ${{ steps.prepare-messages.outputs.comment }}
           PR_NO: ${{ env.PR_ID || github.event.issue.number }}
           COMMENT_ID: ${{ steps.notify-start.outputs.result }}
+          IS_SUCCESS: ${{ steps.playwright-test.outcome == 'success' || '' }}
         with:
           script: |        
             if (process.env.IS_SUCCESS) {
